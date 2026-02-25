@@ -8,7 +8,7 @@ use anyhow::Error;
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 use structopt::StructOpt;
 use thiserror::Error;
-use toml_edit::{value, Document, Item, Table, Value};
+use toml_edit::{value, Document, Formatted, Item, Table, Value};
 
 use query_parser::{parse_query, Query, TpathSegment};
 
@@ -227,11 +227,58 @@ fn set(path: &PathBuf, query: &str, value_str: &str) -> Result<(), Error> {
             }
         }
     }
-    *item = value(value_str);
+
+    // Use our new parse_value function instead of the direct value() call
+    *item = parse_value(value_str);
 
     // TODO actually write back
     print!("{}", doc);
     Ok(())
+}
+
+fn parse_value(value_str: &str) -> toml_edit::Item {
+    // Check for boolean values
+    if value_str == "true" {
+        return value(true);
+    } else if value_str == "false" {
+        return value(false);
+    }
+
+    // Check if it's a number (integer or float)
+    if let Ok(int_val) = value_str.parse::<i64>() {
+        return value(int_val);
+    }
+    if let Ok(float_val) = value_str.parse::<f64>() {
+        return value(float_val);
+    }
+
+    // Check for arrays (basic implementation)
+    if value_str.starts_with('[') && value_str.ends_with(']') {
+        let inner = &value_str[1..value_str.len() - 1];
+        let elements: Vec<&str> = inner
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let mut array = toml_edit::Array::new();
+
+        for elem in elements {
+            // Recursively parse each element
+            let parsed = parse_value(elem);
+            if let Item::Value(v) = parsed {
+                array.push(v);
+            } else {
+                // Fallback to string if we couldn't parse it as a specific type
+                array.push(Value::String(Formatted::new(elem.into())));
+            }
+        }
+
+        return Item::Value(Value::Array(array));
+    }
+
+    // Default to string
+    value(value_str)
 }
 
 fn parse_query_cli(query: &str) -> Result<Query, CliError> {

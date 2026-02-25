@@ -126,7 +126,7 @@ y = "new"
 
 #[rustfmt::skip]
 tomltest_set!(set_string_existing_table, ["x.z", "123"], format!(
-r#"{INITIAL}z = "123"
+r#"{INITIAL}z = 123
 "#));
 
 #[rustfmt::skip]
